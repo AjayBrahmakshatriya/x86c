@@ -197,12 +197,11 @@ token_end:
 
 
 # 32 bytes per identifier
-.section .iden_table_data, "aw", @progbits
+	.section .data
 identifier_table:
         .quad   0x6d61696e
         .quad   0, 0, 0
 
-.section .iden_table_bss, "aw", @nobits
 identifier_table_start:
         .space  40960
 

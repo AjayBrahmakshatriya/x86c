@@ -20,3 +20,6 @@ $(EXECUTABLE_NAME): $(OBJS)
 	mkdir -p $(@D)
 	gcc $^ -o $@
 
+
+clean:
+	rm -rf $(BUILD_DIR)
