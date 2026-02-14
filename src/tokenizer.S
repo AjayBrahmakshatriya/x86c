@@ -1,18 +1,4 @@
-
-# Special token constants
-.equ	TOKEN_IDENTIFIER, 0x1
-.equ	TOKEN_INTEGER,	0x2
-
-.equ KEYWORD_char, 0x63686172
-.equ KEYWORD_continue, 0x636f6e74696e7565
-.equ KEYWORD_else, 0x656c7365
-.equ KEYWORD_if, 0x6966
-.equ KEYWORD_int, 0x696e74
-.equ KEYWORD_long, 0x6c6f6e67
-.equ KEYWORD_return, 0x72657475726e
-.equ KEYWORD_sizeof, 0x73697a656f66
-.equ KEYWORD_void, 0x766f6964
-.equ KEYWORD_while, 0x7768696c65
+.include "defs.inc"
 
 	.data
 keyword_table:
@@ -41,7 +27,6 @@ append_token:
 /*
 Assemble token in %rbx, %rcx, %rdx, %rsi
 */
-
 	.globl get_token
 get_token:
 	xorq	%rbx, %rbx
@@ -131,6 +116,7 @@ get_token_identifier_and_keyword:
 	jnz	store_identifier
 
 	leaq	keyword_table(%rip), %rax
+	leaq	-8(%rax), %rax
 
 check_next_keyword:
 	cmpq	$0, (%rax)
@@ -143,17 +129,39 @@ check_next_keyword:
 	movq	%rbx, %rax
 	retq
 
-store_identifier:
-	movq	identifier_table_end(%rip), %rax		
+store_identifier:	
+	leaq	identifier_table(%rip), %rax
+	leaq	-32(%rax), %rax
+
+check_next_identifier:
+	leaq	32(%rax), %rax
+	cmpq	%rax, identifier_table_end(%rip)
+	je	add_new_identifier
+	cmpq	%rbx, (%rax)
+	jne	check_next_identifier
+	cmpq	%rcx, 8(%rax)
+	jne	check_next_identifier
+	cmpq	%rdx, 16(%rax)
+	jne	check_next_identifier
+	cmpq	%rsi, 24(%rax)
+	jne	check_next_identifier
+
+	leaq	32(%rax), %rax
+	jmp	store_identifier_finalize
+	
+add_new_identifier:
 	mov	%rbx, (%rax)
 	mov	%rcx, 8(%rax)
 	mov	%rdx, 16(%rax)
 	mov	%rsi, 24(%rax)	
 	leaq	32(%rax), %rax
 	movq	%rax, identifier_table_end(%rip)	
+
+store_identifier_finalize:
 	leaq	identifier_table(%rip), %rbx
 	subq	%rbx, %rax
 	shrq	$5, %rax
+	decq	%rax
 	movq	%rax, %rbx
 	movq	$TOKEN_IDENTIFIER, %rax
 	retq
@@ -177,7 +185,8 @@ get_token_integer:
 	retq
 	
 program_parsing_end:
-	jmp	program_parsing_end
+	movq	$TOKEN_EOF, %rax
+	retq
 
 	.section .bss
 	.lcomm token_buffer, 40960
@@ -187,11 +196,17 @@ token_end:
 	.quad token_buffer
 
 
-	.section .bss
+	.section .data
 # 32 bytes per identifier
-	.lcomm identifier_table, 40960
+identifier_table:
+	.quad	0x6d61696e		
+	.quad	0
+	.quad	0
+	.quad	0
+identifier_table_start:
+	.space	40960
 
 	.data
 identifier_table_end:
-	.quad	identifier_table
+	.quad	identifier_table_start
 

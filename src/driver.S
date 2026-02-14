@@ -18,7 +18,9 @@ Return2: %rbx
 Global variables - %r10...
 
 %r10 - token_read_head
-
+%r11 - type of current TLD
+%r12 - name of current TLD
+%r14 - code gen area
 */
 
 	.globl main
@@ -51,16 +53,15 @@ main:
 	syscall
 
 	leaq	program_source(%rip), %r10
+	leaq	codegen_buffer(%rip), %r14
 
-token_loop:
-	callq	get_token	
-	jmp	token_loop
+	call	parse_tu
 
-	xorq 	%rax, %rax
-	retq
+	jmp 	execute_program
 
 
 
+	.globl report_error
 report_error:
 	movq	$1, %rax
 	movq	%rsi, %rdx

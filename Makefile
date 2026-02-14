@@ -14,7 +14,7 @@ all: $(EXECUTABLE_NAME)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.S
 	mkdir -p $(@D)
-	gcc $^ -o $@ -c
+	gcc $^ -o $@ -c -I $(SRC_DIR)
 
 $(EXECUTABLE_NAME): $(OBJS)
 	mkdir -p $(@D)
