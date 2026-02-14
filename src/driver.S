@@ -73,8 +73,7 @@ report_error_loop:
 
 
 	.section .bss
-program_source:
-	.lcomm buffer, 40960
+	.lcomm program_source, 40960
 
 	.data
 token_read_head:
