@@ -200,6 +200,8 @@ parse_stmt:
 	movabsq	$KEYWORD_return, %rcx
 	cmpq	%rcx, %rax
 	je	parse_return_stmt
+	cmpq	$KEYWORD_if, %rax
+	je	parse_if_stmt	
 
 	call	return_token
 	jmp	parse_expr_stmt	
@@ -221,7 +223,98 @@ parse_expr_stmt:
 	call	get_token
 	retq
 
+parse_if_stmt:
+	call	parse_if_stmt_sub
+	retq
+
+#000000000000007c <if_condition>:
+#  7c:   58                      pop    %rax
+#  7d:   58                      pop    %rax
+#  7e:   48 85 c0                test   %rax,%rax
+#  81:   0f 84 08 00 00 00       je     8f <else_part>
+#  87:   90                      nop
+#  88:   90                      nop
+#  89:   90                      nop
+#  8a:   e9 03 00 00 00          jmp    92 <if_end>
+#
+#000000000000008f <else_part>:
+#  8f:   90                      nop
+#  90:   90                      nop
+#  91:   90                      nop
+
+
+parse_if_stmt_sub:
+	push	%rbp
+	movq	%rsp, %rbp
+	leaq	-32(%rsp), %rsp
+	# -8(%rbp) - address of conditional forward jump
+	# -16(%rbp) - address of unconditional forward jump after then
+	
+	call	get_token
+	call	parse_expr
+	call	get_token
+	
+	movw	$0x5858, (%r14)		
+	movb	$0x48, 2(%r14)
+	movb	$0x85, 3(%r14)
+	movb	$0xc0, 4(%r14)
+	movw	$0x840f, 5(%r14)
+	leaq	7(%r14), %r14
+	movq	%r14, -8(%rbp)
+	leaq	4(%r14), %r14
+	
+	callq	parse_stmt_block			
+
+	call	get_token
+	cmpq	$KEYWORD_else, %rax
+	jne	finish_if_no_else
+
+	movb	$0xe9, (%r14)	
+	leaq	1(%r14), %r14
+	movq	%r14, -16(%rbp)
+	leaq	4(%r14), %r14
+
+	movq	-8(%rbp), %rax
+	movq	%r14, %rbx
+	subq	%rax, %rbx
+	leaq	-4(%rbx), %rbx
+	movl	%ebx, (%rax)
+	
+	callq	parse_stmt_block	
+	movq	-16(%rbp), %rax
+	movq	%r14, %rbx
+	subq	%rax, %rbx
+	leaq	-4(%rbx), %rbx
+	movl	%ebx, (%rax)
+	jmp	finish_if_stmt
+	
+finish_if_no_else:
+	callq	return_token
+
+	movq	-8(%rbp), %rax
+	movq	%r14, %rbx
+	subq	%rax, %rbx
+	leaq	-4(%rbx), %rbx
+	movl	%ebx, (%rax)	
+	
+finish_if_stmt:
+	leave
+	retq
+	
 parse_empty_stmt:
+	retq
+
+
+parse_stmt_block:
+	call	get_token
+parse_stmt_block_next:
+	call	get_token
+	cmpq	$TOKEN_RBRACES, %rax
+	je	parse_stmt_block_end	
+	call	return_token
+	call	parse_stmt
+	jmp	parse_stmt_block_next	
+parse_stmt_block_end:
 	retq
 
 /* Exprs can be of the form - 
