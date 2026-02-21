@@ -1,6 +1,8 @@
-int foo ;
+int foo = 13 ;
+int foo2 ;
 long bar ;
 char baz ;
 int main ( ) {
-	return 42 ;
+	bar = foo + 12 ;
+	return bar ;
 }

@@ -29,6 +29,14 @@ Assemble token in %rbx, %rcx, %rdx, %rsi
 */
 	.globl get_token
 get_token:
+	movq	token_cache(%rip), %rax
+	movq	token_cache + 8(%rip), %rbx
+	testq	%rax, %rax
+	jz	get_token_continue
+	movq	$0, token_cache(%rip)
+	retq
+	
+get_token_continue:
 	xorq	%rbx, %rbx
 	xorq	%rcx, %rcx
 	xorq	%rdx, %rdx
@@ -119,10 +127,10 @@ get_token_identifier_and_keyword:
 	leaq	-8(%rax), %rax
 
 check_next_keyword:
+	leaq	8(%rax), %rax	
 	cmpq	$0, (%rax)
 	jz	store_identifier
 
-	leaq	8(%rax), %rax	
 	cmpq	%rbx, (%rax)
 	jne	check_next_keyword	
 
@@ -188,6 +196,13 @@ program_parsing_end:
 	movq	$TOKEN_EOF, %rax
 	retq
 
+
+	.globl return_token
+return_token:
+	movq	%rax, token_cache(%rip)
+	movq	%rbx, token_cache + 8(%rip)
+	retq
+
 	.section .bss
 	.lcomm token_buffer, 40960
 
@@ -208,4 +223,10 @@ identifier_table_start:
 	.data
 identifier_table_end:
 	.quad	identifier_table_start
+
+
+	.data
+token_cache:
+	.quad 0
+	.quad 0
 
