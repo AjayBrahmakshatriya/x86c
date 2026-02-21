@@ -77,13 +77,9 @@ shift_and_continue:
 	xorq	%rbx, %rbx	
 
 read_till_end:
-	movabsq	$0xff00000000000000, %rax
-	testq	%rax, %rbx
-	jnz	shift_and_continue
-	
 	movb	(%r10), %al	
 	incq	%r10
-	
+
 	testb 	%al, %al
 	###
 	jz	get_token_end
@@ -91,6 +87,10 @@ read_till_end:
 	cmp	$33, %al
 	jl 	consume_spaces
 
+	movabsq	$0xff00000000000000, %rdi
+	testq	%rdi, %rbx
+	jnz	shift_and_continue
+	
 	shlq	$8, %rbx
 	movb	%al, %bl
 	
@@ -214,8 +214,10 @@ token_end:
 # 32 bytes per identifier
 	.section .data
 identifier_table:
-        .quad   0x6d61696e
+        .quad   0x6d61696e # 0
         .quad   0, 0, 0
+	.quad	0x7075745f63686172 # 1
+	.quad	0, 0, 0
 
 identifier_table_start:
         .space  40960

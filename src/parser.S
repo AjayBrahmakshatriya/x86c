@@ -202,6 +202,9 @@ parse_stmt:
 	je	parse_return_stmt
 	cmpq	$KEYWORD_if, %rax
 	je	parse_if_stmt	
+	movabsq	$KEYWORD_while, %rcx
+	cmpq	%rcx, %rax	
+	je	parse_while_stmt
 
 	call	return_token
 	jmp	parse_expr_stmt	
@@ -300,6 +303,66 @@ finish_if_no_else:
 finish_if_stmt:
 	leave
 	retq
+
+#0000000000000093 <loop_back>:
+#  93: 90                        nop
+#  94: 58                        pop    %rax
+#  95: 58                        pop    %rax
+#  96: 48 85 c0                  test   %rax,%rax
+#  99: 0f 84 08 00 00 00         je     a7 <loop_done>
+#  9f: 90                        nop
+#  a0: 90                        nop
+#  a1: 90                        nop
+#  a2: e9 ec ff ff ff            jmp    93 <loop_back>
+#
+#00000000000000a7 <loop_done>:
+#  a7: 90     
+
+parse_while_stmt:
+	call	parse_while_stmt_sub
+	retq
+
+parse_while_stmt_sub:
+	push	%rbp
+	movq	%rsp, %rbp
+	leaq	-32(%rsp), %rsp
+	# -8(%rbp) - store start of loop
+	# -16(%rbp) - address of conditional forward jump after check
+
+	call	get_token	
+	movq	%r14, -8(%rbp)
+	call	parse_expr
+	call	get_token
+
+	movw	$0x5858, (%r14)		
+	movb	$0x48, 2(%r14)
+	movb	$0x85, 3(%r14)
+	movb	$0xc0, 4(%r14)
+	movw	$0x840f, 5(%r14)
+	leaq	7(%r14), %r14
+	movq	%r14, -16(%rbp)
+	leaq	4(%r14), %r14
+
+	callq	parse_stmt_block
+	movb	$0xe9, (%r14)	
+	leaq	1(%r14), %r14
+	
+	movq	-8(%rbp), %rax	
+	subq	%r14, %rax	
+	leaq	-4(%rax), %rax
+	movl	%eax, (%r14)	
+	leaq	4(%r14), %r14
+
+	movq	-16(%rbp), %rax
+	movq	%r14, %rbx
+	subq	%rax, %rbx
+	leaq	-4(%rbx), %rbx
+	movl	%ebx, (%rax)	
+	
+finish_while_stmt:
+	leave 
+	retq
+	
 	
 parse_empty_stmt:
 	retq
@@ -413,6 +476,8 @@ parse_binary_operator_expr:
 	pushq	%rcx
 	callq	parse_expr
 	popq	%rcx
+	movl	$0xd23148, (%r14)
+	leaq	3(%r14), %r14
 	movl	$0xc93148, (%r14)
 	movb	$0x5b, 3(%r14)	
 	movb	$0x5b, 4(%r14)	
@@ -527,10 +592,15 @@ local_table_not_found:
 current_function_slots:
 	.quad 0
 	
-	.section .bss
+	.section .data
 	.globl global_symbol_table
 # 24 (GTES) bytes per identifier, <identifier_index>, <codegen address>, <type of variable>
-	.lcomm global_symbol_table, 40960
+global_symbol_table:
+	.quad	1
+	.quad	x86c_libc_put_char
+	.quad	KEYWORD_void
+global_symbol_table_start:
+	.space 40960
 
 	.section .bss
 # 24 (LTES) per identifier, <identifier_index>, <stack slot offset>, <type of variable>
@@ -539,7 +609,7 @@ current_function_slots:
 	.data
 	.globl global_symbol_table_end
 global_symbol_table_end:
-	.quad	global_symbol_table
+	.quad	global_symbol_table_start
 local_symbol_table_end:
 	.quad	local_symbol_table
 
@@ -559,6 +629,9 @@ binary_operator_table:
 	.quad	TOKEN_DIVIDE
 	.long	0x90909090
 	.long	0x50fbf748
+	.quad	TOKEN_PERCENT
+	.long	0x90909090
+	.long	0x52fbf748
 	.quad	TOKEN_EQUALS
 	.quad	0x9051c1940fd83948
 	.quad	TOKEN_NOTEQUALS
