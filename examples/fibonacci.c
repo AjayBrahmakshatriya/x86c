@@ -6,19 +6,13 @@ void put_integer ( int x ) {
 	if ( x / 10 ) {
 		put_integer ( x / 10 ) ;
 	}
-	int y = x % 10 ;
-	put_char ( y + 48 ) ;
+	put_char ( x % 10 + 48 ) ;
 }
 
 int fib ( int x ) {
-	if ( x == 0 ) {
+	if ( x == 0 || x == 1 ) {
 		return 1 ;
 	}
-
-	if ( x == 1 ) {
-		return 1 ;
-	}
-
 	return fib ( x - 1 ) + fib ( x - 2 ) ;
 }
 

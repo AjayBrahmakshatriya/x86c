@@ -21,7 +21,10 @@
 .equ	TOKEN_NOTEQUALS, 0x213d
 .equ	TOKEN_LBRACES, 0x7b
 .equ	TOKEN_RBRACES, 0x7d
+.equ	TOKEN_AND, 0x2626
+.equ	TOKEN_OR, 0x7c7c
 .equ	TOKEN_EOF, 0x0
+
 
 .equ KEYWORD_char, 0x63686172
 .equ KEYWORD_continue, 0x636f6e74696e7565
@@ -33,4 +36,9 @@
 .equ KEYWORD_sizeof, 0x73697a656f66
 .equ KEYWORD_void, 0x766f6964
 .equ KEYWORD_while, 0x7768696c65
+
+
+
+.equ 	GTES, 24
+.equ	LTES, 24
 
