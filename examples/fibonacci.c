@@ -10,15 +10,21 @@ void put_integer ( int x ) {
 	put_char ( y + 48 ) ;
 }
 
-
-int factorial ( int v ) {
-	if ( v == 0 ) { 
+int fib ( int x ) {
+	if ( x == 0 ) {
 		return 1 ;
 	}
-	return 	factorial ( v - 1 ) * v ;
+
+	if ( x == 1 ) {
+		return 1 ;
+	}
+
+	return fib ( x - 1 ) + fib ( x - 2 ) ;
 }
 
-int main ( ) { 
-	put_integer ( factorial ( 5 ) ) ;
+
+int main ( ) {
+	put_integer ( fib ( 6 ) ) ;
 	put_char ( 10 ) ;
+	return 0 ;
 }

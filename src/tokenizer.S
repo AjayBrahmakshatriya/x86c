@@ -13,15 +13,6 @@ keyword_table:
 	.quad KEYWORD_void
 	.quad KEYWORD_while	
 	.quad 0
-	
-	.text
-	.globl 	append_token
-append_token:
-	movq	token_end(%rip), %rax
-	movq	%rdi, (%rax)
-	leaq	8(%rax), %rax
-	movq	%rax, token_end(%rip)
-	retq	
 
 
 /*
@@ -70,12 +61,6 @@ get_token_continue:
 	cmp	$126, %al
 	jl	get_token_special_character
 
-shift_and_continue:
-	movq	%rdx, %rsi
-	movq	%rcx, %rdx
-	movq	%rbx, %rcx
-	xorq	%rbx, %rbx	
-
 read_till_end:
 	movb	(%r10), %al	
 	incq	%r10
@@ -89,8 +74,14 @@ read_till_end:
 
 	movabsq	$0xff00000000000000, %rdi
 	testq	%rdi, %rbx
-	jnz	shift_and_continue
-	
+	jz	read_till_end_continue
+
+	movq	%rdx, %rsi
+	movq	%rcx, %rdx
+	movq	%rbx, %rcx
+	xorq	%rbx, %rbx	
+
+read_till_end_continue:	
 	shlq	$8, %rbx
 	movb	%al, %bl
 	
@@ -202,13 +193,6 @@ return_token:
 	movq	%rax, token_cache(%rip)
 	movq	%rbx, token_cache + 8(%rip)
 	retq
-
-	.section .bss
-	.lcomm token_buffer, 40960
-
-	.data
-token_end:
-	.quad token_buffer
 
 
 # 32 bytes per identifier

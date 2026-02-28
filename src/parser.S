@@ -25,11 +25,16 @@ invalid_identifier:
 	.asciz "Invalid Identifier"
 .equ invalid_identifier_len, . - invalid_identifier
 
+parse_variable_decl_error_msg:
+	.asciz "Variable declaration expected variable name"
+.equ parse_variable_decl_error_msg_len, . - parse_variable_decl_error_msg
+
 .equ 	GTES, 24
 .equ	LTES, 24
 .equ	BOTES, 16
 
 .macro push_nullptr offset
+	# 6a 00    push   $0x0
 	movb	$0x6a, \offset(%r14)
 	movb	$0x00, \offset+1(%r14)
 .endm
@@ -144,10 +149,18 @@ parse_argument:
 parse_function_body:
 	callq	fix_local_symbol_table_for_args
 
+	# 55          		push   %rbp
+  	# 48 89 e5    		mov    %rsp, %rbp
+  	# 48 8d a4 24 cc ed ff  lea    -0x1234(%rsp),%rsp
+  	# ff
+	
 	movl	$0xe5894855, (%r14)
+	movl	$0x24a48d48, 4(%r14)
+	leaq	8(%r14), %r14
+	movq	%r14, current_function_stack_setup_patch(%rip)
 	leaq	4(%r14), %r14
 	
-	movq	$0, current_function_slots(%rip)	
+	movq	$-8, current_function_slots(%rip)	
 	# consume the {
 	call	get_token		
 
@@ -162,10 +175,15 @@ parse_function_body_next:
 
 parse_function_body_end:
 	callq	gen_function_body_cleanup
+	movq	current_function_slots(%rip), %rax
+	movq	current_function_stack_setup_patch(%rip), %rbx
+	movl	%eax, (%rbx)
 	retq
 
 gen_function_body_cleanup:
 	# Finalize the function
+  	# c9     leave
+  	# c3     ret
 	movb	$0xc9, 	(%r14)	
 	movb	$0xc3, 	1(%r14)
 	leaq	2(%r14), %r14
@@ -206,11 +224,21 @@ parse_stmt:
 	cmpq	%rcx, %rax	
 	je	parse_while_stmt
 
+	movq	%rax, %rsi	
+	call	check_is_type	
+	
+	testq	%rax, %rax
+	jnz	parse_variable_decl
+
+	movq	%rsi, %rax
+
 	call	return_token
 	jmp	parse_expr_stmt	
 
 parse_return_stmt:
 	call	parse_expr	
+	# 58      pop    %rax
+	# 58      pop    %rax
 	movb	$0x58, 	(%r14)	
 	movb	$0x58, 	1(%r14)	
 	leaq	2(%r14), %r14
@@ -221,6 +249,8 @@ parse_return_stmt:
 
 parse_expr_stmt:
 	call	parse_expr
+	# 58      pop    %rax
+	# 58      pop    %rax
 	movw	$0x5858, (%r14)
 	leaq	2(%r14), %r14		
 	call	get_token
@@ -257,6 +287,10 @@ parse_if_stmt_sub:
 	call	parse_expr
 	call	get_token
 	
+        # 58                   pop    %rax
+        # 58                   pop    %rax
+        # 48 85 c0             test   %rax,%rax
+        # 0f 84 00 00 00 00    je     00 <else_part>
 	movw	$0x5858, (%r14)		
 	movb	$0x48, 2(%r14)
 	movb	$0x85, 3(%r14)
@@ -272,6 +306,7 @@ parse_if_stmt_sub:
 	cmpq	$KEYWORD_else, %rax
 	jne	finish_if_no_else
 
+	# e9 00 00 00 00    jmp    00 <if_end>
 	movb	$0xe9, (%r14)	
 	leaq	1(%r14), %r14
 	movq	%r14, -16(%rbp)
@@ -334,6 +369,11 @@ parse_while_stmt_sub:
 	call	parse_expr
 	call	get_token
 
+
+	# 58                   pop    %rax
+  	# 58                   pop    %rax
+  	# 48 85 c0             test   %rax,%rax
+ 	# 0f 84 00 00 00 00    je     00 <loop_done>
 	movw	$0x5858, (%r14)		
 	movb	$0x48, 2(%r14)
 	movb	$0x85, 3(%r14)
@@ -344,6 +384,8 @@ parse_while_stmt_sub:
 	leaq	4(%r14), %r14
 
 	callq	parse_stmt_block
+
+	# e9 ff ff ff ff    jmp    00 <loop_back>
 	movb	$0xe9, (%r14)	
 	leaq	1(%r14), %r14
 	
@@ -379,6 +421,60 @@ parse_stmt_block_next:
 	jmp	parse_stmt_block_next	
 parse_stmt_block_end:
 	retq
+
+
+parse_variable_decl:
+	push	%rbp
+	movq	%rsp, %rbp
+	subq	$8, %rsp
+	# -8 (%rbp) - current variable slot
+	movq	%rsi, %rax
+	call	return_token	
+	call	parse_type
+	movq	%rax, %r11
+	call	get_token
+	cmpq	$TOKEN_IDENTIFIER, %rax
+	jne	parse_variable_decl_error
+	movq	%rbx, %r12
+
+	movq	current_function_slots(%rip), %rbx
+	movq	local_symbol_table_end(%rip), %rax	
+	movq	%r12, (%rax)
+	movq	%rbx, 8(%rax)
+	movq	%r11, 16(%rax)
+	leaq	LTES(%rax), %rax
+	movq	%rax, local_symbol_table_end(%rip)
+	movq	%rbx, -8(%rbp)
+	leaq	-0x8(%rbx), %rbx
+	movq	%rbx, current_function_slots(%rip)
+	
+	call	get_token
+
+	cmpq	$TOKEN_ASSIGN, %rax
+	jne	parse_variable_decl_no_init
+
+	call	parse_expr
+        # 58                      pop    %rax
+        # 58                      pop    %rax
+        # 48 89 85 00 00 00 00    mov    %rax,0x0000(%rbp)	
+	movq	-8(%rbp), %rbx
+	movw	$0x5858, (%r14)
+	movl	$0x00858948, 2(%r14)
+	movl	%ebx, 5(%r14)
+	leaq	9(%r14), %r14
+	call	get_token	
+
+parse_variable_decl_no_init:
+	cmpq	$TOKEN_SEMICOLON, %rax
+	jne	parse_variable_decl_error
+
+	leave
+	retq	
+
+parse_variable_decl_error:
+	leaq	parse_variable_decl_error_msg(%rip), %rdi
+	movq	$parse_variable_decl_error_msg_len, %rsi
+	jmp	report_error
 
 /* Exprs can be of the form - 
 <unary_operator> <expr>
@@ -429,6 +525,8 @@ parse_expr_end:
 	retq
 	
 parse_integer_expr:
+	# 48 c7 c0 00 00 00 00    mov    $0x0000,%rax
+   	# 50                      push   %rax
 	movb	$0x48, (%r14)
 	movb	$0xc7, 1(%r14)
 	movb	$0xc0, 2(%r14)
@@ -451,6 +549,9 @@ parse_identifier_expr:
 
 parse_identifier_expr_local:
 	movq	8(%rax), %rax	
+ 	# 48 8d 85 aa 00 00 00    lea    0xaa(%rbp),%rax
+  	# ff 30                   push   (%rax)
+  	# 50
 	movb	$0x48, (%r14)
 	movb	$0x8d, 1(%r14)
 	movb	$0x85, 2(%r14)
@@ -463,6 +564,10 @@ parse_identifier_expr_local:
 
 parse_identifier_expr_global:
 	movq	8(%rax), %rax	
+	# 48 b8 00 00 00 00 00    movabs $0x0000000000000,%rax
+  	# 00 00 00
+  	# ff 30                   push   (%rax)
+  	# 50                      push   %rax
 	movb	$0x48, (%r14)
 	movb	$0xb8, 1(%r14)
 	movq	%rax, 2(%r14)
@@ -476,9 +581,15 @@ parse_binary_operator_expr:
 	pushq	%rcx
 	callq	parse_expr
 	popq	%rcx
+	# 48 31 d2   xor    %rdx,%rdx
 	movl	$0xd23148, (%r14)
 	leaq	3(%r14), %r14
+	# 48 31 c9   xor    %rcx,%rcx
 	movl	$0xc93148, (%r14)
+	# 5b    pop    %rbx
+  	# 5b    pop    %rbx
+  	# 58    pop    %rax
+  	# 58    pop    %rax
 	movb	$0x5b, 3(%r14)	
 	movb	$0x5b, 4(%r14)	
 	movb	$0x58, 5(%r14)
@@ -493,7 +604,13 @@ parse_assign_expr:
 	pushq	%rcx
 	callq	parse_expr
 	popq	%rcx
+	# 5b    pop    %rbx
+  	# 5b    pop    %rbx
+  	# 58    pop    %rax
+  	# 59    pop    %rcx
 	movl	$0x59585b5b, (%r14)
+	# 48 89 18   mov    %rbx,(%rax)
+  	# 53	     push   %rbx 
 	movl	$0x53188948, 4(%r14)
 	push_nullptr 8
 	leaq	10(%r14), %r14
@@ -517,6 +634,7 @@ parse_function_call_expr_sub:
 
 parse_next_call_argument:	
 	call	parse_expr
+	# 58    pop    %rax
 	movb	$0x58, (%r14)	
 	leaq	1(%r14), %r14
 	addq	$8, -8(%rbp)	
@@ -527,9 +645,15 @@ parse_next_call_argument:
 	
 parse_function_call_expr_end:
 	movq	-8(%rbp), %rax
+	# 48 8b 84 24 00 00 00    mov    0x000000(%rsp),%rax
+	# 00
+	# ff d0                   call   *%rax
 	movl	$0x24848b48, (%r14)
 	movl	%eax, 4(%r14)
 	movw	$0xd0ff, 8(%r14)
+	# 48 8d a4 24 55 66 ff    lea    0xff6655(%rsp),%rsp
+  	# 00
+  	# 50                      push   %rax
 	movl	$0x24a48d48, 10(%r14)
 	leaq	16(%rax), %rax
 	movl	%eax, 14(%r14)	
@@ -539,7 +663,23 @@ parse_function_call_expr_end:
 
 	leave
 	retq
-	
+
+check_is_type:
+	movq	$1, %rax	
+	cmpq	$KEYWORD_char, %rsi
+	je	check_is_type_return
+	cmpq	$KEYWORD_int, %rsi
+	je	check_is_type_return
+	cmpq	$KEYWORD_long, %rsi
+	je	check_is_type_return	
+	cmpq	$KEYWORD_void, %rsi
+	je	check_is_type_return
+
+	xor	%rax, %rax
+check_is_type_return:
+	retq	
+
+
 parse_type:
 	call	get_token
 	cmpq $KEYWORD_char, %rax
@@ -590,6 +730,8 @@ local_table_not_found:
 
 	.data
 current_function_slots:
+	.quad 0
+current_function_stack_setup_patch:
 	.quad 0
 	
 	.section .data
