@@ -42,3 +42,4 @@
 .equ 	GTES, 24
 .equ	LTES, 24
 
+.equ elf_header_size, 64 + 56

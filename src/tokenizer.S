@@ -18,6 +18,7 @@ keyword_table:
 /*
 Assemble token in %rbx, %rcx, %rdx, %rsi
 */
+	.text
 	.globl get_token
 get_token:
 	movq	token_cache(%rip), %rax

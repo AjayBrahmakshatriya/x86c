@@ -4,7 +4,7 @@ filenotfound:
 .equ filenotfound_len, . - filenotfound
 
 filenamemissing:
-	.asciz "Invoke as x86c <filename>\n"
+	.asciz "Invoke as x86c <filename> <output filename>\n"
 .equ filenamemissing_len, . - filenamemissing
 
 /* Calling conventions for x86c 
@@ -27,10 +27,12 @@ Global variables - %r10...
 main:
 	movq	%rsi, %rbx
 
-	cmp	$2, %edi
+	cmp	$3, %edi
 	leaq	filenamemissing(%rip), %rdi
 	movq	$filenamemissing_len, %rsi
 	jl	report_error
+
+	movq	%rbx, compiler_args(%rip)
 
 	movq 	8(%rbx), %rdi
 	movq	$2, %rax
@@ -55,11 +57,31 @@ main:
 	leaq	program_source(%rip), %r10
 	leaq	codegen_buffer(%rip), %r14
 
+	call	prepare_execution_area
+
 	call	parse_tu
 
-	jmp 	execute_program
+	call 	execution_area_finalize
 
-
+	# jmp 	execute_program
+	movq	compiler_args(%rip), %rbx
+	movq	16(%rbx), %rdi
+	movq	$2, %rax
+	movq	$0x41, %rsi
+	movq	$484, %rdx
+	syscall
+	
+	movq	%rax, %rdi	
+	leaq	codegen_buffer(%rip), %rsi
+	movq	%r14, %rdx
+	subq	%rsi, %rdx
+	movq	$1, %rax
+	syscall
+	
+	movq	$3, %rax
+	syscall
+		
+	retq
 
 	.globl report_error
 report_error:
@@ -78,3 +100,7 @@ report_error_loop:
 	.data
 token_read_head:
 	.quad program_source
+
+	.data
+compiler_args:
+	.quad 0

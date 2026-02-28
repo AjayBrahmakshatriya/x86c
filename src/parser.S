@@ -505,7 +505,8 @@ current_function_stack_setup_patch:
 # 24 (GTES) bytes per identifier, <identifier_index>, <codegen address>, <type of variable>
 global_symbol_table:
 	.quad	1
-	.quad	x86c_libc_put_char
+	.quad	0 # patch in address of x86c_libc_put_char
+#+ codegen_buffer + elf_header_size
 	.quad	KEYWORD_void
 global_symbol_table_start:
 	.space 40960
