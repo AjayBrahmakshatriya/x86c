@@ -491,6 +491,11 @@ parse_type:
 	jmp	report_error
 
 parse_type_done:
+	call	get_token
+	cmpq	$TOKEN_STAR, %rax
+	je	parse_type_done
+	call	return_token
+
 	retq
 
 

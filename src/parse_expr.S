@@ -17,6 +17,9 @@ invalid_identifier:
 	.asciz "Invalid Identifier"
 .equ invalid_identifier_len, . - invalid_identifier
 
+invalid_pre_0_expr:
+	.asciz "Invalid Expr of Precdence 0"
+.equ invalid_pre_0_expr_len, . - invalid_pre_0_expr
 
 .equ	BOTES, 24
 .macro push_nullptr offset
@@ -62,7 +65,66 @@ parse_expr_pre_14_end:
 	call	return_token
 	retq
 
+
+parse_expr_pre_2:
+	call	get_token
+	cmpq	$TOKEN_AMP, %rax	
+	jne	parse_expr_pre_2_not_amp
+	call	parse_expr_pre_2
+  	# 58                      pop    %rax
+  	# 5b                      pop    %rbx
+  	# 50                      push   %rax
+  	# 6a 00                   push   $0x0			
+	movl	$0x00505b58, (%r14)
+	movw	$0x006a, 3(%r14)
+	leaq	5(%r14), %r14
+	retq
+parse_expr_pre_2_not_amp:
+	cmpq	$TOKEN_STAR, %rax
+	jne	parse_expr_pre_2_not_star
+	call	parse_expr_pre_2
+ 	# 58                      pop    %rax
+ 	# 58                      pop    %rax
+ 	# ff 30                   push   (%rax)
+ 	# 50                      push   %rax
+	movl	$0x30ff5858, (%r14)
+	movb	$0x50, 4(%r14)
+	leaq	5(%r14), %r14
+	retq
+
+parse_expr_pre_2_not_star:
+	call	return_token
+	callq	parse_expr_pre_1
+	retq	
+		
+parse_expr_pre_1:
+	call	parse_expr_pre_0
+parse_expr_pre_1_continue:
+	call	get_token
+	cmpq	$TOKEN_LPARAN, %rax
+	je	parse_function_call_expr	
+	call	return_token
+	retq
+
+# Identifier/Integers
+parse_expr_pre_0:
+	call	get_token	
+	cmpq	$TOKEN_INTEGER, %rax
+	je	parse_integer_expr
+	cmpq	$TOKEN_IDENTIFIER, %rax
+	je	parse_identifier_expr
+
+	leaq	invalid_pre_0_expr(%rip), %rdi
+	movq	$invalid_pre_0_expr_len, %rsi
+	jmp	report_error	
+	
+parse_expr_pre_0_continue:	
+	retq
+
 parse_expr_pre:
+	cmpq	$2, %rsi
+	je	parse_expr_pre_2
+	
 	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$40, %rsp
@@ -72,33 +134,6 @@ parse_expr_pre:
 	# -40 (%rbp) - jump instruction address
 	movq	%rsi, -8(%rbp)
 
-	cmpq	$2, %rsi
-	jne	parse_expr_pre_continue
-
-	# Unary operators on the left
-	
-	call	get_token	
-	cmpq	$TOKEN_INTEGER, %rax
-	je	parse_integer_expr
-
-	cmpq	$TOKEN_IDENTIFIER, %rax
-	je	parse_identifier_expr
-
-parse_expr_continue:	
-	# Unary operators on the right
-	call	get_token
-	cmpq	$TOKEN_LPARAN, %rax
-	jne	parse_expr_pre_end
-	jmp	parse_function_call_expr	
-
-parse_expr_pre_end:
-	call	return_token		
-	leave
-	retq
-
-parse_expr_pre_continue:
-
-	movq	-8(%rbp), %rsi
 	decq	%rsi
 	call	parse_expr_pre
 
@@ -327,7 +362,7 @@ parse_integer_expr:
 	movb	$0x50, 7(%r14)
 	push_nullptr 8
 	leaq	10(%r14), %r14
-	jmp 	parse_expr_continue
+	jmp 	parse_expr_pre_0_continue
 	
 parse_identifier_expr:
 	call	check_local_table	
@@ -353,7 +388,7 @@ parse_identifier_expr_local:
 	movb	$0x30, 8(%r14)
 	movb	$0x50, 9(%r14)
 	leaq	10(%r14), %r14
-	jmp	parse_expr_continue
+	jmp	parse_expr_pre_0_continue
 
 parse_identifier_expr_global:
 	movq	8(%rax), %rax	
@@ -368,11 +403,11 @@ parse_identifier_expr_global:
 	movb	$0x30, 11(%r14)	
 	movb	$0x50, 12(%r14)
 	leaq	13(%r14), %r14
-	jmp	parse_expr_continue
+	jmp	parse_expr_pre_0_continue
 
 parse_function_call_expr:
 	call	parse_function_call_expr_sub
-	jmp	parse_expr_continue
+	jmp	parse_expr_pre_1_continue
 
 parse_function_call_expr_sub:
 	pushq	%rbp
