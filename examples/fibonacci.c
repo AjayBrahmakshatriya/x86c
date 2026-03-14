@@ -1,3 +1,7 @@
+void put_char ( int x ) {
+	syscall6 ( 1 , 1 , & x , 1 , 0 , 0 , 0 ) ;
+} 
+
 void put_integer ( int x ) {
 	if ( x < 0 ) {
 		put_char ( 45 ) ;
@@ -9,7 +13,7 @@ void put_integer ( int x ) {
 	put_char ( x % 10 + 48 ) ;
 }
 
-int fib ( int x ) {
+long fib ( long x ) {
 	if ( x == 0 || x == 1 ) {
 		return 1 ;
 	}
@@ -18,7 +22,7 @@ int fib ( int x ) {
 
 
 int main ( ) {
-	put_integer ( fib ( 6 ) ) ;
+	put_integer ( fib ( 43 ) ) ;
 	put_char ( 10 ) ;
 	return 0 ;
 }

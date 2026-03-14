@@ -1,3 +1,6 @@
+void put_char ( int x ) {
+	syscall6 ( 1 , 1 , & x , 1 , 0 , 0 , 0 ) ;
+} 
 int main ( ) { 
         put_char ( 72 ) ;
         put_char ( 101 ) ;

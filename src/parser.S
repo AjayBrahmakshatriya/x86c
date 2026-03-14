@@ -220,11 +220,7 @@ parse_stmt:
 
 parse_return_stmt:
 	call	parse_expr	
-	# 58      pop    %rax
-	# 58      pop    %rax
-	movb	$0x58, 	(%r14)	
-	movb	$0x58, 	1(%r14)	
-	leaq	2(%r14), %r14
+	call	ensure_rvalue
 	# Consume semicolon
 	call	get_token
 	call	gen_function_body_cleanup
@@ -232,10 +228,6 @@ parse_return_stmt:
 
 parse_expr_stmt:
 	call	parse_expr
-	# 58      pop    %rax
-	# 58      pop    %rax
-	movw	$0x5858, (%r14)
-	leaq	2(%r14), %r14		
 	call	get_token
 	retq
 
@@ -268,18 +260,16 @@ parse_if_stmt_sub:
 	
 	call	get_token
 	call	parse_expr
+	call	ensure_rvalue
 	call	get_token
 	
-        # 58                   pop    %rax
-        # 58                   pop    %rax
         # 48 85 c0             test   %rax,%rax
         # 0f 84 00 00 00 00    je     00 <else_part>
-	movw	$0x5858, (%r14)		
-	movb	$0x48, 2(%r14)
-	movb	$0x85, 3(%r14)
-	movb	$0xc0, 4(%r14)
-	movw	$0x840f, 5(%r14)
-	leaq	7(%r14), %r14
+	movb	$0x48, 0(%r14)
+	movb	$0x85, 1(%r14)
+	movb	$0xc0, 2(%r14)
+	movw	$0x840f, 3(%r14)
+	leaq	5(%r14), %r14
 	movq	%r14, -8(%rbp)
 	leaq	4(%r14), %r14
 	
@@ -350,19 +340,17 @@ parse_while_stmt_sub:
 	call	get_token	
 	movq	%r14, -8(%rbp)
 	call	parse_expr
+	call	ensure_rvalue
 	call	get_token
 
 
-	# 58                   pop    %rax
-  	# 58                   pop    %rax
   	# 48 85 c0             test   %rax,%rax
  	# 0f 84 00 00 00 00    je     00 <loop_done>
-	movw	$0x5858, (%r14)		
-	movb	$0x48, 2(%r14)
-	movb	$0x85, 3(%r14)
-	movb	$0xc0, 4(%r14)
-	movw	$0x840f, 5(%r14)
-	leaq	7(%r14), %r14
+	movb	$0x48, 0(%r14)
+	movb	$0x85, 1(%r14)
+	movb	$0xc0, 2(%r14)
+	movw	$0x840f, 3(%r14)
+	leaq	5(%r14), %r14
 	movq	%r14, -16(%rbp)
 	leaq	4(%r14), %r14
 
@@ -437,14 +425,12 @@ parse_variable_decl:
 	jne	parse_variable_decl_no_init
 
 	call	parse_expr
-        # 58                      pop    %rax
-        # 58                      pop    %rax
+	call	ensure_rvalue
         # 48 89 85 00 00 00 00    mov    %rax,0x0000(%rbp)	
 	movq	-8(%rbp), %rbx
-	movw	$0x5858, (%r14)
-	movl	$0x00858948, 2(%r14)
-	movl	%ebx, 5(%r14)
-	leaq	9(%r14), %r14
+	movl	$0x00858948, 0(%r14)
+	movl	%ebx, 3(%r14)
+	leaq	7(%r14), %r14
 	call	get_token	
 
 parse_variable_decl_no_init:
@@ -500,6 +486,7 @@ parse_type_done:
 
 
 	.data
+	.globl current_function_slots
 current_function_slots:
 	.quad 0
 current_function_stack_setup_patch:
@@ -510,7 +497,7 @@ current_function_stack_setup_patch:
 # 24 (GTES) bytes per identifier, <identifier_index>, <codegen address>, <type of variable>
 global_symbol_table:
 	.quad	1
-	.quad	0 # patch in address of x86c_libc_put_char
+	.quad	x86c_libc_syscall6	
 #+ codegen_buffer + elf_header_size
 	.quad	KEYWORD_void
 global_symbol_table_start:

@@ -48,16 +48,18 @@ prepare_execution_area:
 	leaq	_x86c_libc_begin(%rip), %rsi
 	movq	_x86c_libc_size(%rip), %rcx
 	rep 	movsb
-
-	# Patch in address of put_char
-	leaq	x86c_libc_put_char(%rip), %rax
-	leaq	_x86c_libc_begin(%rip), %rbx
-	subq	%rbx, %rax
-	leaq	codegen_buffer(%rip), %rbx
-	leaq	elf_header_size(%rax, %rbx, 1), %rax
-	movq	%rax, global_symbol_table + 8(%rip)
-	
 	movq	%rdi, %r14
+
+	# patch the global symbol table
+	leaq	_x86c_libc_begin(%rip), %rsi	
+	leaq	codegen_buffer(%rip), %rcx
+	leaq	global_symbol_table(%rip), %rax
+
+	movq	8(%rax), %rbx
+	subq	%rsi, %rbx
+	leaq	elf_header_size(%rbx, %rcx, 1), %rbx
+	movq	%rbx, 8(%rax)
+	
 	retq
 	
 	.globl execution_area_finalize		

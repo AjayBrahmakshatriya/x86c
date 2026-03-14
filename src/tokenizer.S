@@ -201,7 +201,7 @@ return_token:
 identifier_table:
         .quad   0x6d61696e # 0
         .quad   0, 0, 0
-	.quad	0x7075745f63686172 # 1
+	.quad	0x73797363616c6c36 #1
 	.quad	0, 0, 0
 
 identifier_table_start:

@@ -12,6 +12,10 @@ EXAMPLE_EXECUTABLES=$(subst $(EX_DIR),$(BUILD_DIR)/examples,$(EXAMPLES:.c=))
 
 EXECUTABLE_NAME=$(BUILD_DIR)/x86c
 
+.PHONY: test
+.PHONY: run
+.PHONY: clean
+
 all: $(EXECUTABLE_NAME)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.S
@@ -27,6 +31,8 @@ $(BUILD_DIR)/examples/%: $(EX_DIR)/%.c $(EXECUTABLE_NAME)
 	$(EXECUTABLE_NAME) $< $@
 
 test: $(EXAMPLE_EXECUTABLES)
+
+run: test
 	@for exec in $(EXAMPLE_EXECUTABLES); do \
 		$$exec; \
 		echo $$exec \($$?\); \

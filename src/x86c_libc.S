@@ -10,19 +10,18 @@ _x86c_libc_start:
 	movq	%rax, %rdi
 	movq	$60, %rax
 	syscall		
-	.globl x86c_libc_put_char
-x86c_libc_put_char:
-	pushq	%rbp
-	movq	%rsp, %rbp
-	leaq	16(%rbp), %rsi
-	movq	$1, %rdi
-	movq	$1, %rdx
-	movq	$1, %rax
+	.globl x86c_libc_syscall6
+x86c_libc_syscall6:
+	movq	8(%rsp), %r9
+	movq	16(%rsp), %r8
+	movq	24(%rsp), %r10
+	movq	32(%rsp), %rdx
+	movq	40(%rsp), %rsi
+	movq	48(%rsp), %rdi
+	movq	56(%rsp), %rax
 	syscall
-	leave
 	retq
 _x86c_libc_end:	
-
 	.data 
 	.globl _x86c_libc_size
 _x86c_libc_size:

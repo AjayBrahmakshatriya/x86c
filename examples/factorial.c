@@ -1,3 +1,7 @@
+void put_char ( int x ) {
+	syscall6 ( 1 , 1 , & x , 1 , 0 , 0 , 0 ) ;
+} 
+
 void put_integer ( int x ) {
 	if ( x < 0 ) {
 		put_char ( 45 ) ;
