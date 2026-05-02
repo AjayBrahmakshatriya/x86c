@@ -18,9 +18,9 @@ EXECUTABLE_NAME=$(BUILD_DIR)/x86c
 
 all: $(EXECUTABLE_NAME)
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.S
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.S $(SRC_DIR)/*.inc
 	@mkdir -p $(@D)
-	gcc $^ -o $@ -c -I $(SRC_DIR)
+	gcc $< -o $@ -c -I $(SRC_DIR)
 
 $(EXECUTABLE_NAME): $(OBJS)
 	@mkdir -p $(@D)

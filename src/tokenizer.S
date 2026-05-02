@@ -15,19 +15,28 @@ keyword_table:
 	.quad 0
 
 tokenize_lookup:
-.byte  0
-.space 32, TOKEN_MASK_SPACE
-.space 15, TOKEN_MASK_SPECIAL # !-/
-.space 10, TOKEN_MASK_INTEGER # 0 -9
-.space 7, TOKEN_MASK_SPECIAL # :-@
-.space 26, TOKEN_MASK_KEYWORD # A-Z
-.space 4, TOKEN_MASK_SPECIAL # [-^
-.byte	TOKEN_MASK_KEYWORD # _
-.byte 	TOKEN_MASK_SPECIAL # `
-.space 26, TOKEN_MASK_KEYWORD # a-z
-.space 4, TOKEN_MASK_SPECIAL # { - ~
-.byte TOKEN_MASK_SPACE # DEL
-.space 128, TOKEN_MASK_SPACE
+.word  0x0000
+.fill  32, 2, TOKEN_MASK_SPACE
+.word         TOKEN_MASK_SPECIAL_D # !
+.fill   4, 2, TOKEN_MASK_SPECIAL # "- %
+.word         TOKEN_MASK_EQUALS  # & 
+.fill   9, 2, TOKEN_MASK_SPECIAL # '-/
+.fill  10, 2, TOKEN_MASK_INTEGER # 0 -9
+.fill	2, 2, TOKEN_MASK_SPECIAL # :-;
+.word	      TOKEN_MASK_SPECIAL_D # < 
+.word         TOKEN_MASK_EQUALS    # = 
+.word	      TOKEN_MASK_SPECIAL_D # > 
+.fill   2, 2, TOKEN_MASK_SPECIAL # ?-@
+.fill  26, 2, TOKEN_MASK_KEYWORD # A-Z
+.fill   4, 2, TOKEN_MASK_SPECIAL # [-^
+.word         TOKEN_MASK_KEYWORD # _
+.word 	      TOKEN_MASK_SPECIAL # `
+.fill  26, 2, TOKEN_MASK_KEYWORD # a-z
+.word         TOKEN_MASK_SPECIAL # {
+.word         TOKEN_MASK_EQUALS  # |
+.fill   2, 2, TOKEN_MASK_SPECIAL # } - ~
+.word         TOKEN_MASK_SPACE # DEL
+.fill 128, 2, TOKEN_MASK_SPACE
 
 	.text
 	.globl get_token
@@ -48,27 +57,29 @@ get_token_continue:
 
 	movzbl 	%al, %eax
 	leaq	tokenize_lookup(%rip), %rbx
-	movb	(%rbx, %rax), %bl
-	shrb	$4, %bl
+	movb	1(%rbx, %rax, 2), %bl
 
 next_character:
 	leaq	1(%r10), %r10
 	movb	(%r10), %al
 	movzbl	%al, %eax
 	leaq	tokenize_lookup(%rip), %rcx
-	movb	(%rcx, %rax), %al
+	movb	(%rcx, %rax, 2), %al
 	andb	%bl, %al
 	jnz	next_character
 
 	# rsi - start of token, %r10 end of token + 1
 	
-	cmpb	$0b00001000, %bl # white space
+	cmpb	$0x10, %bl # white space
 	je	get_token
 
-	cmpb	$0b00000001, %bl # integer
+	cmpb	$0x01, %bl # integer
 	je	token_as_integer
 
-	cmpb	$0b00000100, %bl # special character
+	cmpb	$0x04, %bl # special character
+	je	token_as_special
+
+	cmpb	$0x08, %bl # special character double
 	je	token_as_special
 
 	# must be a keyword/identifier	
