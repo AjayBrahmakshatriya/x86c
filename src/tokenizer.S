@@ -14,10 +14,21 @@ keyword_table:
 	.quad KEYWORD_while	
 	.quad 0
 
+tokenize_lookup:
+.byte  0
+.space 32, TOKEN_MASK_SPACE
+.space 15, TOKEN_MASK_SPECIAL # !-/
+.space 10, TOKEN_MASK_INTEGER # 0 -9
+.space 7, TOKEN_MASK_SPECIAL # :-@
+.space 26, TOKEN_MASK_KEYWORD # A-Z
+.space 4, TOKEN_MASK_SPECIAL # [-^
+.byte	TOKEN_MASK_KEYWORD # _
+.byte 	TOKEN_MASK_SPECIAL # `
+.space 26, TOKEN_MASK_KEYWORD # a-z
+.space 4, TOKEN_MASK_SPECIAL # { - ~
+.byte TOKEN_MASK_SPACE # DEL
+.space 128, TOKEN_MASK_SPACE
 
-/*
-Assemble token in %rbx, %rcx, %rdx, %rsi
-*/
 	.text
 	.globl get_token
 get_token:
@@ -27,137 +38,78 @@ get_token:
 	jz	get_token_continue
 	movq	$0, token_cache(%rip)
 	retq
-	
-get_token_continue:
-	xorq	%rbx, %rbx
-	xorq	%rcx, %rcx
-	xorq	%rdx, %rdx
-	xorq	%rsi, %rsi
-	xorq	%rax, %rax
+
+get_token_continue:	
+	movq	%r10, %rsi	
 
 	movb	(%r10), %al
-	incq	%r10
-
-	mov	%al, %bl
-	
 	testb	%al, %al
-	jz	program_parsing_end	
+	jz	program_parsing_end
 
-	# Check - ! " # $ % & ' ( ) * + , - . /
-	cmp	$48, %al
-	jl	get_token_special_character
+	movzbl 	%al, %eax
+	leaq	tokenize_lookup(%rip), %rbx
+	movb	(%rbx, %rax), %bl
+	shrb	$4, %bl
 
-	# check - 0-9	
-	cmp	$58, %al
-	jl	get_token_integer_start
+next_character:
+	leaq	1(%r10), %r10
+	movb	(%r10), %al
+	movzbl	%al, %eax
+	leaq	tokenize_lookup(%rip), %rcx
+	movb	(%rcx, %rax), %al
+	andb	%bl, %al
+	jnz	next_character
 
-	# check : ; < = > ? 	
-	cmp	$64, %al
-	jl	get_token_special_character
-
-	# check A - z, TODO: Change when supporting []
-	cmp	$123, %al
-	jl 	get_token_identifier_and_keyword
-
-	cmp	$126, %al
-	jl	get_token_special_character
-
-read_till_end:
-	movb	(%r10), %al	
-	incq	%r10
-
-	testb 	%al, %al
-	###
-	jz	get_token_end
-
-	cmp	$33, %al
-	jl 	consume_spaces
-
-	movabsq	$0xff00000000000000, %rdi
-	testq	%rdi, %rbx
-	jz	read_till_end_continue
-
-	movq	%rdx, %rsi
-	movq	%rcx, %rdx
-	movq	%rbx, %rcx
-	xorq	%rbx, %rbx	
-
-read_till_end_continue:	
-	shlq	$8, %rbx
-	movb	%al, %bl
+	# rsi - start of token, %r10 end of token + 1
 	
-	jmp read_till_end	
+	cmpb	$0b00001000, %bl # white space
+	je	get_token
 
-consume_spaces:
-	movb	(%r10), %al	
-	incq	%r10	
+	cmpb	$0b00000001, %bl # integer
+	je	token_as_integer
 
-	testb 	%al, %al
-	###
-	jz	get_token_end
+	cmpb	$0b00000100, %bl # special character
+	je	token_as_special
+
+	# must be a keyword/identifier	
+	movq	%r10, %rax
+	subq	%rsi, %rax		
+	cmpq	$8, %rax
+	jg	token_as_identifier
 	
-	cmp	$33, %al
-	jl 	consume_spaces
-
-
-get_token_end:
-	decq	%r10
-
-	movq	%rbx, %rax
-	retq
-	
-get_token_special_character:
-	jmp	read_till_end			
-
-get_token_identifier_and_keyword:
-	call	read_till_end	
-
-	testq	%rcx, %rcx
-	jnz	store_identifier
-
-	leaq	keyword_table(%rip), %rax
-	leaq	-8(%rax), %rax
-
+	callq	token_as_special # reuse logic to pick up token	
+	leaq	keyword_table(%rip), %rbx
 check_next_keyword:
-	leaq	8(%rax), %rax	
-	cmpq	$0, (%rax)
-	jz	store_identifier
-
-	cmpq	%rbx, (%rax)
+	cmpq	$0, (%rbx)
+	jz	token_as_identifier
+	cmpq	%rax, (%rbx)
+	leaq	8(%rbx), %rbx
 	jne	check_next_keyword	
-
-	movq	%rbx, %rax
 	retq
 
-store_identifier:	
-	leaq	identifier_table(%rip), %rax
-	leaq	-32(%rax), %rax
-
-check_next_identifier:
-	leaq	32(%rax), %rax
-	cmpq	%rax, identifier_table_end(%rip)
-	je	add_new_identifier
-	cmpq	%rbx, (%rax)
-	jne	check_next_identifier
-	cmpq	%rcx, 8(%rax)
-	jne	check_next_identifier
-	cmpq	%rdx, 16(%rax)
-	jne	check_next_identifier
-	cmpq	%rsi, 24(%rax)
-	jne	check_next_identifier
-
-	leaq	32(%rax), %rax
-	jmp	store_identifier_finalize
+token_as_identifier:
+	movq	identifier_table_end(%rip), %rdi
+	movq	$0, (%rdi)
+	movq	$0,  8(%rdi)
+	movq	$0,  16(%rdi)
+	movq	$0,  24(%rdi)
 	
-add_new_identifier:
-	mov	%rbx, (%rax)
-	mov	%rcx, 8(%rax)
-	mov	%rdx, 16(%rax)
-	mov	%rsi, 24(%rax)	
-	leaq	32(%rax), %rax
-	movq	%rax, identifier_table_end(%rip)	
+	movq	%r10, %rcx
+	subq	%rsi, %rcx	
+	rep	movsb	
+	
+	movq	identifier_table_end(%rip), %rbx
 
-store_identifier_finalize:
+	leaq	identifier_table(%rip), %rax
+check_next_identifier:	
+	cmpq	%rax, %rbx
+	je	identifier_store_and_return
+	movq	%rax, %rdi
+	movq	%rbx, %rsi			
+	movq	$32, %rcx	
+	rep	cmpsb
+	leaq	32(%rax), %rax
+	jne	check_next_identifier
 	leaq	identifier_table(%rip), %rbx
 	subq	%rbx, %rax
 	shrq	$5, %rax
@@ -166,28 +118,46 @@ store_identifier_finalize:
 	movq	$TOKEN_IDENTIFIER, %rax
 	retq
 
-get_token_integer_start:
-	xorq	%rbx, %rbx
-get_token_integer:
-	imul	$10, %ebx
-	sub	$48, %eax
-	add	%eax, %ebx
-
-	movb	(%r10), %al
-	incq	%r10
-	
-	cmp	$48, %al
-	jge	get_token_integer
-
-	call 	consume_spaces
-
-	movq	$TOKEN_INTEGER, %rax
+identifier_store_and_return:
+	leaq	32(%rbx), %rbx
+	movq	%rbx, identifier_table_end(%rip)
+	leaq	identifier_table(%rip), %rbx
+	subq	%rbx, %rax
+	shrq	$5, %rax
+	movq	%rax, %rbx
+	movq	$TOKEN_IDENTIFIER, %rax
 	retq
 	
+
+token_as_integer:
+	xorq	%rbx, %rbx
+token_as_integer_continue:
+	movb	(%rsi), %al
+	movzbl	%al, %eax
+	imulq	$10, %rbx	
+	sub	$48, %eax # - 0
+	addq	%rax, %rbx	
+	incq	%rsi
+	cmpq	%rsi, %r10
+	jne	token_as_integer_continue		
+	movq	$TOKEN_INTEGER, %rax
+	retq	
+
+token_as_special:
+	movq	%rsi, %rcx
+	xorq	%rax, %rax
+token_as_special_continue:
+	movb	(%rcx), %bl
+	shl	$8, %rax
+	movb	%bl, %al
+	incq	%rcx
+	cmpq	%rcx, %r10
+	jne	token_as_special_continue
+	retq	
+
 program_parsing_end:
 	movq	$TOKEN_EOF, %rax
 	retq
-
 
 	.globl return_token
 return_token:
@@ -196,12 +166,16 @@ return_token:
 	retq
 
 
-# 32 bytes per identifier
+# 32 bytes per identifier, stored in string order padded with 0
 	.section .data
+identifier_scratch:
+	.space	32, 0
+
 identifier_table:
-        .quad   0x6d61696e # 0
+	.quad	0x000000006e69616d #main
         .quad   0, 0, 0
-	.quad	0x73797363616c6c36 #1
+	# .quad	0x73797363616c6c36
+	.quad	0x366c6c6163737973 #syscall6
 	.quad	0, 0, 0
 
 identifier_table_start:
